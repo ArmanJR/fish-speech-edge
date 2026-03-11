@@ -51,10 +51,11 @@ def load_text2semantic_model(
         str(checkpoint_path), load_weights=True, max_length=MAX_SEQ_LEN
     )
 
-    # Move to device and set dtype, preserving int8 quantized weight dtypes
+    # Move to device and set dtype; only convert floating-point tensors to
+    # preserve bool masks (causal_mask) and int8 quantized weights.
     model._apply(
         lambda t: t.to(device=device)
-        if t.dtype == torch.int8
+        if not t.is_floating_point()
         else t.to(device=device, dtype=precision)
     )
     model.eval()
