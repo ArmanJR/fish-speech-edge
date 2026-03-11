@@ -27,15 +27,16 @@ Updated `load_model` -> `init_model` to match the current function name in `infe
 
 ## Performance (S2-Pro, FP16, Jetson AGX Orin)
 
-| Metric | Original (max_seq_len=32768) | Edge (max_seq_len=4096) |
-|---|---|---|
-| Semantic generation | 2.96 tok/s | 2.91 tok/s |
-| Memory bandwidth utilization | 13.5 GB/s of 140.8 GB/s | 13.3 GB/s of 140.8 GB/s |
-| GPU memory (peak) | 10.15 GB | 10.27 GB |
-| Peak memory during load | ~17 GB | ~8.6 GB |
-| KV cache size | 2.25 GB | 288 MB |
-| Codec loading | ~10.6s | ~12s |
-| Total pipeline | 29.7s (15.6x RT) | 36.6s (18.8x RT) |
+| Metric | Stock | + meta-device fix | + reduced KV cache (Edge) |
+|---|---|---|---|
+| Semantic generation | OOM | 0.66 tok/s | 2.91 tok/s |
+| Memory bandwidth utilization | — | 3.0 GB/s of 140.8 GB/s | 13.3 GB/s of 140.8 GB/s |
+| GPU memory (peak) | OOM (~25 GB) | 17.47 GB | 10.27 GB |
+| Peak memory during load | ~25 GB (FP32 init + weights) | ~8.6 GB | ~8.6 GB |
+| KV cache size | 2.25 GB | 2.25 GB | 288 MB |
+| Total pipeline | — | 81.7s (for 1.9s audio) | 36.6s (for 1.95s audio) |
+
+Stock Fish Speech OOMs on Jetson because `model_cls(config)` allocates ~17 GB of FP32 random weights on unified memory before loading the ~8.6 GB checkpoint. The meta-device init eliminates that transient spike. Reducing `max_seq_len` from 32768 to 4096 cuts KV cache from 2.25 GB to 288 MB, freeing bandwidth for actual inference (0.66 → 2.91 tok/s).
 
 ## Setup
 
