@@ -1,3 +1,55 @@
+# Fish Speech Edge (Jetson Fork)
+
+Fork of [Fish Speech](https://github.com/fishaudio/fish-speech) optimized for edge inference on **NVIDIA Jetson AGX Orin** (30 GB unified memory, Ampere GPU, CUDA 12.6).
+
+## What's Changed
+
+### Meta-device model loading (`llama.py`)
+Model weights are initialized on `torch.device("meta")` during `from_pretrained()`, avoiding a ~8.6 GB transient allocation for random weights. After `load_state_dict(assign=True)` loads the real weights, non-persistent computed buffers (`freqs_cis`, `causal_mask`, `fast_freqs_cis`) are recomputed on CPU. This cuts peak memory from ~17 GB to ~8.6 GB on Jetson's unified memory.
+
+### Int8-aware device/dtype transfer (`inference.py`)
+The original `model.to(device, dtype)` fails on models with residual meta-device buffers, and the `to_empty()` workaround destroys loaded weights. Replaced with a custom `_apply` that moves tensors to the target device and dtype while preserving `torch.int8` weight buffers from quantized checkpoints.
+
+### Single-script TTS (`tts.py`)
+Standalone entry point for text-to-speech on Jetson. Loads the model, generates semantic tokens, decodes audio through the DAC codec, saves a WAV file, and frees GPU memory. Supports configurable `MAX_SEQ_LEN` (default 4096, down from 32768) to reduce KV cache from 2.25 GB to 288 MB.
+
+```
+source .venv/bin/activate
+python tts.py "Hello, world!"
+python tts.py "Hello, world!" --output /tmp/hello.wav --seed 123
+```
+
+### Jetson PyTorch compatibility (`pyproject.toml`)
+Removed `torch` and `torchaudio` version pins and PyTorch index sources so the project uses the system Jetson-native PyTorch build (`~/.local/lib/python3.10/site-packages/torch/`).
+
+### Fix stale import (`tools/llama/quantize.py`)
+Updated `load_model` -> `init_model` to match the current function name in `inference.py`.
+
+## Performance (S2-Pro, FP16, max_seq_len=4096)
+
+| Metric | Value |
+|---|---|
+| Semantic generation | ~2.9 tok/s |
+| Memory bandwidth utilization | 13.3 GB/s of 140.8 GB/s |
+| GPU memory (peak) | 10.3 GB |
+| Codec loading | ~12s |
+
+## Setup
+
+```bash
+# Assumes Jetson-native PyTorch is installed system-wide
+git clone https://github.com/ArmanJR/fish-speech-edge.git
+cd fish-speech-edge
+uv venv --system-site-packages
+source .venv/bin/activate
+uv pip install -e .
+
+# Download S2-Pro checkpoint
+huggingface-cli download fishaudio/s2-pro --local-dir checkpoints/s2-pro
+```
+
+---
+
 <div align="center">
 <h1>Fish Speech</h1>
 
