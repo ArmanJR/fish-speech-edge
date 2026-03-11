@@ -25,14 +25,17 @@ Removed `torch` and `torchaudio` version pins and PyTorch index sources so the p
 ### Fix stale import (`tools/llama/quantize.py`)
 Updated `load_model` -> `init_model` to match the current function name in `inference.py`.
 
-## Performance (S2-Pro, FP16, max_seq_len=4096)
+## Performance (S2-Pro, FP16, Jetson AGX Orin)
 
-| Metric | Value |
-|---|---|
-| Semantic generation | ~2.9 tok/s |
-| Memory bandwidth utilization | 13.3 GB/s of 140.8 GB/s |
-| GPU memory (peak) | 10.3 GB |
-| Codec loading | ~12s |
+| Metric | Original (max_seq_len=32768) | Edge (max_seq_len=4096) |
+|---|---|---|
+| Semantic generation | 2.96 tok/s | 2.91 tok/s |
+| Memory bandwidth utilization | 13.5 GB/s of 140.8 GB/s | 13.3 GB/s of 140.8 GB/s |
+| GPU memory (peak) | 10.15 GB | 10.27 GB |
+| Peak memory during load | ~17 GB | ~8.6 GB |
+| KV cache size | 2.25 GB | 288 MB |
+| Codec loading | ~10.6s | ~12s |
+| Total pipeline | 29.7s (15.6x RT) | 36.6s (18.8x RT) |
 
 ## Setup
 
