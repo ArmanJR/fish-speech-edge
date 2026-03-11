@@ -362,7 +362,12 @@ def generate(
 def init_model(checkpoint_path, device, precision, compile=False):
     model = DualARTransformer.from_pretrained(checkpoint_path, load_weights=True)
 
-    model = model.to(device=device, dtype=precision)
+    # Move to device and set dtype, preserving int8 quantized weight dtypes
+    model._apply(
+        lambda t: t.to(device=device)
+        if t.dtype == torch.int8
+        else t.to(device=device, dtype=precision)
+    )
     logger.info(f"Restored model from checkpoint")
 
     if isinstance(model, DualARTransformer):

@@ -517,8 +517,10 @@ class BaseTransformer(nn.Module):
                 raise ValueError(f"Unknown model type: {config.model_type}")
 
         logger.info(f"Loading model from {path}, config: {config}")
-        # Initialize model without passing tokenizer explicitly to __init__
-        model = model_cls(config)
+        # Initialize model on meta device to avoid allocating memory for random weights
+        init_device = torch.device("meta") if load_weights else torch.device("cpu")
+        with torch.device(init_device):
+            model = model_cls(config)
         # Attach tokenizer to model instance for inference convenience (optional, but good for user scripts)
         model.tokenizer = tokenizer
 
@@ -585,6 +587,22 @@ class BaseTransformer(nn.Module):
 
             err = model.load_state_dict(weights, strict=False, assign=True)
             logger.info(f"Model weights loaded - Status: {err}")
+
+            # Recompute non-persistent buffers that were placeholders on meta device
+            if init_device.type == "meta":
+                model.freqs_cis = precompute_freqs_cis(
+                    config.max_seq_len, config.head_dim, config.rope_base
+                )
+                model.causal_mask = torch.tril(
+                    torch.ones(
+                        config.max_seq_len, config.max_seq_len, dtype=torch.bool
+                    )
+                )
+                if hasattr(model, "fast_freqs_cis"):
+                    model.fast_freqs_cis = precompute_freqs_cis(
+                        config.num_codebooks, config.fast_head_dim, config.rope_base
+                    )
+                logger.info("Recomputed non-persistent buffers after meta-device init")
 
         if lora_config is not None:
             setup_lora(model, lora_config)
